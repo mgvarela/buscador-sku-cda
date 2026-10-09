@@ -166,9 +166,6 @@
             <dl class="row small mb-3">
               ${row('Marca', p.marca)}
               ${row('Categoría', p.categoria)}
-              ${row('Stock', p.logistica?.stock)}
-              ${row('Stock por sucursal', sucursales.map(([n, q]) => `${n}: ${q}`).join(' · ') || null)}
-              ${row('Actualizado', p.updated_at ? new Date(p.updated_at).toLocaleString('es-AR') : null)}
             </dl>
 
             <h6>Descripción</h6>
