@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Buscador de productos por SKU</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="./images/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="./images/favicon.svg" />
+  <link rel="shortcut icon" href="./images/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./images/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Admin" />
+  <link rel="manifest" href="./images/site.webmanifest" />
   <style>
     body { background: #f4f6f9; }
     .desc { white-space: pre-line; }
@@ -16,8 +22,15 @@
   <div class="container py-4" style="max-width: 900px;">
 
     <div id="loginScreen" class="card shadow-sm mx-auto" style="max-width: 380px;">
-      <div class="card-body">
+      <div class="card-body text-center"> <!-- text-center para que el logo quede centrado -->
+        
+        <!-- Logo de Casa del Audio -->
+        <div class="mb-3">
+          <img src="https://casadelaudio.com/media/logo/stores/1/logo.png" alt="Casa del Audio" class="login-logo" style="max-height: 45px; width: auto;">
+        </div>
+
         <h5 class="card-title mb-3">Acceso</h5>
+        <p class="text-muted small">Ingresá la contraseña</p>
         <input type="password" id="loginPassword" class="form-control mb-2" placeholder="Contraseña" autocomplete="current-password">
         <div id="loginError" class="text-danger small mb-2 d-none">Contraseña incorrecta.</div>
         <button id="btnLogin" class="btn btn-primary w-100">Ingresar</button>
