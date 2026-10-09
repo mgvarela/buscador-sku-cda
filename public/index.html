@@ -166,9 +166,6 @@
             <dl class="row small mb-3">
               ${row('Marca', p.marca)}
               ${row('Categoría', p.categoria)}
-              ${row('Precio lista', p.pricing?.precio_lista != null ? money(p.pricing.precio_lista) : null)}
-              ${row('Precio un pago', p.pricing?.precio_un_pago != null ? money(p.pricing.precio_un_pago) : null)}
-              ${row('Cuotas sin interés', p.pricing?.cuotas_sin_interes)}
               ${row('Stock', p.logistica?.stock)}
               ${row('Stock por sucursal', sucursales.map(([n, q]) => `${n}: ${q}`).join(' · ') || null)}
               ${row('Actualizado', p.updated_at ? new Date(p.updated_at).toLocaleString('es-AR') : null)}
