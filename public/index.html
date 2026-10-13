@@ -221,7 +221,6 @@
       const rows = [
         ['Marca', p => p.marca || '—'],
         ['Categoría', p => p.categoria || '—'],
-        ...branches.map(branch => [`Stock: ${prettyKey(branch)}`, p => p.logistica?.stock_por_sucursal?.[branch] ?? '—']),
         ...attributes.map(attribute => [prettyKey(attribute), p => p.catalogo?.atributos?.[attribute] ?? '—'])
       ];
       const headings = products.map((p, i) => `
