@@ -221,10 +221,6 @@
       const rows = [
         ['Marca', p => p.marca || '—'],
         ['Categoría', p => p.categoria || '—'],
-        ['Precio de lista', p => p.pricing?.precio_lista == null ? '—' : formatPrice(p.pricing.precio_lista)],
-        ['Precio en un pago', p => p.pricing?.precio_un_pago == null ? '—' : formatPrice(p.pricing.precio_un_pago)],
-        ['Cuotas sin interés', p => p.pricing?.cuotas_sin_interes ?? '—'],
-        ['Stock total', p => p.logistica?.stock ?? '—'],
         ...branches.map(branch => [`Stock: ${prettyKey(branch)}`, p => p.logistica?.stock_por_sucursal?.[branch] ?? '—']),
         ...attributes.map(attribute => [prettyKey(attribute), p => p.catalogo?.atributos?.[attribute] ?? '—'])
       ];
