@@ -41,10 +41,11 @@
       <h4 class="mb-3">Buscador de productos por SKU</h4>
 
       <form id="searchForm" class="input-group mb-3">
-        <input type="text" id="skuInput" class="form-control" placeholder="Ingresá el SKU" autocomplete="off" required>
-        <button class="btn btn-primary" type="submit" id="btnSearch">Buscar</button>
+        <textarea id="skuInput" class="form-control" rows="2" placeholder="Ingresá uno o más SKU, separados por coma, punto y coma o línea" autocomplete="off" required></textarea>
+        <button class="btn btn-primary" type="submit" id="btnSearch">Buscar / comparar</button>
       </form>
 
+      <p class="form-text mb-3">Con un SKU se muestra la ficha; con varios, se comparan los productos.</p>
       <div id="status" class="alert d-none"></div>
       <div id="suggestions" class="list-group mb-3 d-none"></div>
       <div id="result" class="d-none"></div>
@@ -52,9 +53,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>
     let password = sessionStorage.getItem('buscador_pw') || '';
     let currentProduct = null;
+    let comparisonProducts = [];
 
     const $ = id => document.getElementById(id);
     const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -95,7 +98,7 @@
         sessionStorage.setItem('buscador_pw', pass);
         unlock();
         const sku = new URLSearchParams(location.search).get('sku');
-        if (sku) { $('skuInput').value = sku; search(sku); }
+        if (sku) { $('skuInput').value = sku; search([sku]); }
       } else {
         $('loginError').classList.remove('d-none');
       }
@@ -106,21 +109,64 @@
       if (!password) return;
       unlock();
       const sku = new URLSearchParams(location.search).get('sku');
-      if (sku) { $('skuInput').value = sku; search(sku); }
+      if (sku) { $('skuInput').value = sku; search([sku]); }
     });
 
     $('searchForm').addEventListener('submit', e => {
       e.preventDefault();
-      search($('skuInput').value.trim());
+      const skus = [...new Set($('skuInput').value.split(/[,\n;]/).map(sku => sku.trim()).filter(Boolean))];
+      search(skus);
     });
 
-    async function search(sku) {
-      if (!sku) return;
+    async function search(skus) {
+      if (!skus.length) return;
       setStatus(null);
       $('result').classList.add('d-none');
       $('suggestions').classList.add('d-none');
       currentProduct = null;
+      comparisonProducts = [];
       $('btnSearch').disabled = true;
+      try {
+        if (skus.length === 1) return await searchOne(skus[0]);
+
+        const results = await mapConcurrent(skus, 5, async sku => {
+          try {
+            const r = await api('/api/search?sku=' + encodeURIComponent(sku));
+            const data = await r.json();
+            if (!data.success) throw new Error(data.error || 'Error');
+            return { sku, data };
+          } catch (error) {
+            return { sku, error };
+          }
+        });
+        comparisonProducts = results.filter(result => result.data?.product).map(result => result.data.product);
+        renderComparison(comparisonProducts);
+
+        const missing = results.filter(result => !result.data?.product);
+        const foundCount = comparisonProducts.length;
+        const statusType = missing.length ? (foundCount ? 'warning' : 'danger') : 'success';
+        const errors = missing.filter(result => result.error);
+        const notFound = missing.filter(result => result.data);
+        const summary = [`Encontrados ${foundCount} de ${skus.length} productos.`];
+        if (notFound.length) summary.push(`Sin coincidencia: ${notFound.map(result => `"${result.sku}"`).join(', ')}.`);
+        if (errors.length) summary.push(`Error al consultar ${errors.map(result => `"${result.sku}": ${result.error.message}`).join('; ')}.`);
+        setStatus(summary.join(' '), statusType);
+
+        const suggestions = notFound.flatMap(result => (result.data.suggestions || []).map(product => ({ product, query: result.sku })));
+        if (suggestions.length) {
+          $('suggestions').innerHTML = `<p class="small text-muted mb-1">Sugerencias para los SKU sin coincidencia:</p>` + suggestions.map(({ product, query }) =>
+            `<button type="button" class="list-group-item list-group-item-action" data-sku="${escapeHtml(product.sku)}">
+               <strong>${escapeHtml(query)} → ${escapeHtml(product.sku)}</strong> - ${escapeHtml(product.nombre || '')}</button>`).join('');
+          $('suggestions').classList.remove('d-none');
+        }
+      } catch (e) {
+        setStatus('Error al consultar: ' + e.message, 'danger');
+      } finally {
+        $('btnSearch').disabled = false;
+      }
+    }
+
+    async function searchOne(sku) {
       try {
         const r = await api('/api/search?sku=' + encodeURIComponent(sku));
         const data = await r.json();
@@ -135,19 +181,82 @@
         $('suggestions').classList.remove('d-none');
       } catch (e) {
         setStatus('Error al consultar: ' + e.message, 'danger');
-      } finally {
-        $('btnSearch').disabled = false;
       }
+    }
+
+    async function mapConcurrent(items, limit, callback) {
+      const results = new Array(items.length);
+      let nextIndex = 0;
+      const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (nextIndex < items.length) {
+          const index = nextIndex++;
+          results[index] = await callback(items[index]);
+        }
+      });
+      await Promise.all(workers);
+      return results;
     }
 
     $('suggestions').addEventListener('click', e => {
       const b = e.target.closest('[data-sku]');
-      if (b) { $('skuInput').value = b.dataset.sku; search(b.dataset.sku); }
+      if (b) { $('skuInput').value = b.dataset.sku; search([b.dataset.sku]); }
+    });
+
+    $('result').addEventListener('click', e => {
+      const pdfButton = e.target.closest('[data-pdf-index]');
+      if (pdfButton) downloadPdf(comparisonProducts[Number(pdfButton.dataset.pdfIndex)], pdfButton);
+      const zipButton = e.target.closest('#btnAllPdfs');
+      if (zipButton) downloadAllPdfs(zipButton);
     });
 
     function row(label, value) {
       if (value === undefined || value === null || value === '') return '';
       return `<dt class="col-sm-4">${escapeHtml(label)}</dt><dd class="col-sm-8">${escapeHtml(value)}</dd>`;
+    }
+
+    function renderComparison(products) {
+      if (!products.length) return;
+      const attributes = [...new Set(products.flatMap(p => Object.keys(p.catalogo?.atributos || {})))];
+      const branches = [...new Set(products.flatMap(p => Object.keys(p.logistica?.stock_por_sucursal || {})))];
+      const rows = [
+        ['Marca', p => p.marca || '—'],
+        ['Categoría', p => p.categoria || '—'],
+        ['Precio de lista', p => p.pricing?.precio_lista == null ? '—' : formatPrice(p.pricing.precio_lista)],
+        ['Precio en un pago', p => p.pricing?.precio_un_pago == null ? '—' : formatPrice(p.pricing.precio_un_pago)],
+        ['Cuotas sin interés', p => p.pricing?.cuotas_sin_interes ?? '—'],
+        ['Stock total', p => p.logistica?.stock ?? '—'],
+        ...branches.map(branch => [`Stock: ${prettyKey(branch)}`, p => p.logistica?.stock_por_sucursal?.[branch] ?? '—']),
+        ...attributes.map(attribute => [prettyKey(attribute), p => p.catalogo?.atributos?.[attribute] ?? '—'])
+      ];
+      const headings = products.map((p, i) => `
+        <th scope="col" class="align-top">
+          <div>${escapeHtml(p.nombre || '(sin nombre)')}</div>
+          <div class="small text-muted font-monospace">${escapeHtml(p.sku)}</div>
+          <div class="d-flex flex-wrap gap-1 mt-2">
+            ${/^https:\/\//i.test(p.url || '') ? `<a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Ver en tienda</a>` : ''}
+            <button class="btn btn-danger btn-sm" data-pdf-index="${i}">PDF</button>
+          </div>
+        </th>`).join('');
+      const tableRows = rows.map(([label, value]) => `
+        <tr><th scope="row">${escapeHtml(label)}</th>${products.map(p =>
+          `<td>${escapeHtml(String(value(p)))}</td>`).join('')}</tr>`).join('');
+
+      $('result').innerHTML = `
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <h5 class="mb-0">Comparación de productos</h5>
+              ${products.length > 1 ? '<button class="btn btn-primary btn-sm" id="btnAllPdfs">Descargar todos los PDF (.zip)</button>' : ''}
+            </div>
+            <div class="table-responsive">
+              <table class="table table-bordered table-sm align-middle small">
+                <thead><tr><th scope="col">Característica</th>${headings}</tr></thead>
+                <tbody>${tableRows}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>`;
+      $('result').classList.remove('d-none');
     }
 
     function renderProduct(p) {
@@ -225,11 +334,45 @@
       try {
         const urls = (p.catalogo?.imagenes || []).filter(u => /^https:\/\//i.test(u)).slice(0, 6);
         const images = (await Promise.all(urls.map(loadImage))).filter(Boolean);
-        buildPdf(p, images);
+        buildPdf(p, images).save(`producto-${safeFilename(p.sku)}.pdf`);
       } finally {
         btn.disabled = false;
         btn.textContent = label;
       }
+    }
+
+    async function downloadAllPdfs(btn) {
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generando ZIP...';
+      try {
+        const zip = new JSZip();
+        for (const p of comparisonProducts) {
+          const urls = (p.catalogo?.imagenes || []).filter(u => /^https:\/\//i.test(u)).slice(0, 6);
+          const images = (await Promise.all(urls.map(loadImage))).filter(Boolean);
+          zip.file(`producto-${safeFilename(p.sku)}.pdf`, buildPdf(p, images).output('blob'));
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'productos-comparados.zip';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e) {
+        setStatus('No se pudieron generar los PDF: ' + e.message, 'danger');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
+
+    function safeFilename(sku) {
+      return String(sku || 'sin-sku').replace(/[^\w.-]+/g, '_');
+    }
+
+    function formatPrice(value) {
+      return Number.isFinite(Number(value)) ? money(value) : String(value);
     }
 
     function buildPdf(p, images) {
@@ -292,7 +435,7 @@
         doc.setPage(i).setFont('helvetica', 'normal').setFontSize(8).setTextColor(130);
         doc.text(`SKU ${pdfText(p.sku)} - Página ${i} de ${total}`, M, H - 8);
       }
-      doc.save(`producto-${String(p.sku).replace(/[^\w.-]+/g, '_')}.pdf`);
+      return doc;
     }
   </script>
 </body>

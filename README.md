@@ -1,12 +1,12 @@
 # Buscador de productos por SKU
 
-Proyecto independiente de `xml-to-json-feed`. Para Compras, Ventas y otras áreas: busca un producto por SKU, muestra su información y descarga una ficha PDF (nombre, SKU, imágenes, descripción y atributos).
+Proyecto independiente de `xml-to-json-feed`. Para Compras, Ventas y otras áreas: busca productos por SKU, permite comparar varios productos y descargar sus fichas PDF (nombre, SKU, imágenes, descripción y atributos).
 
 Solo **consume** la API del feed (`?mode=graphql`); no la modifica ni comparte código con ella.
 
 ## Cómo funciona
 
-- `public/index.html`: interfaz y generación del PDF en el navegador (jsPDF).
+- `public/index.html`: interfaz, comparación de productos y generación de PDF en el navegador (jsPDF y JSZip).
 - `api/search.js`: consulta la API del feed con el token guardado en el servidor. El token nunca llega al navegador. No se piden costos.
 - `api/image.js`: proxy de imágenes (solo hosts permitidos) para poder incrustarlas en el PDF.
 
@@ -27,4 +27,5 @@ vercel --prod   # deploy como proyecto aparte
 ```
 
 `/?sku=XXXX` abre un producto directamente.
+Se pueden ingresar varios SKU separados por comas, punto y coma o saltos de línea para compararlos. La comparación permite descargar cada ficha PDF por separado o descargar todas juntas en un archivo ZIP.
 "# buscador-sku-cda" 
