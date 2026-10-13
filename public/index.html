@@ -45,7 +45,7 @@
         <button class="btn btn-primary" type="submit" id="btnSearch">Buscar / comparar</button>
       </form>
 
-      <p class="form-text mb-3">Con un SKU se muestra la ficha; con varios, se comparan los productos.</p>
+      <p class="form-text mb-3">Con un SKU se muestra la ficha; con varios, se comparan los productos (hasta 5 sku).</p>
       <div id="status" class="alert d-none"></div>
       <div id="suggestions" class="list-group mb-3 d-none"></div>
       <div id="result" class="d-none"></div>
@@ -330,6 +330,8 @@
         const urls = (p.catalogo?.imagenes || []).filter(u => /^https:\/\//i.test(u)).slice(0, 6);
         const images = (await Promise.all(urls.map(loadImage))).filter(Boolean);
         buildPdf(p, images).save(`producto-${safeFilename(p.sku)}.pdf`);
+      } catch (error) {
+        setStatus('No se pudo generar el PDF: ' + error.message, 'danger');
       } finally {
         btn.disabled = false;
         btn.textContent = label;
@@ -432,6 +434,7 @@
       }
       return doc;
     }
+
   </script>
 </body>
 </html>
